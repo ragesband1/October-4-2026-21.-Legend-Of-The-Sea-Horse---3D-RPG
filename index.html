@@ -1,0 +1,1289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>21. Legend Of The Sea Horse - 3D RPG</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Outfit:wght@300;400;600;700&display=swap');
+        
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Outfit', sans-serif;
+            user-select: none;
+            background-color: #0b0f19;
+            color: #f3f4f6;
+        }
+        .font-cinzel { font-family: 'Cinzel', serif; }
+        
+        /* Custom scrollbar for dark UI */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+        ::-webkit-scrollbar-thumb { background: rgba(56, 189, 248, 0.4); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(56, 189, 248, 0.8); }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        .floating-damage {
+            position: absolute;
+            font-weight: 800;
+            pointer-events: none;
+            animation: floatUp 1s ease-out forwards;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+        }
+
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translateY(0) scale(1); }
+            50% { opacity: 1; transform: translateY(-30px) scale(1.3); }
+            100% { opacity: 0; transform: translateY(-60px) scale(0.8); }
+        }
+
+        /* Virtual Joystick Touch styling */
+        #joystick-zone {
+            touch-action: none;
+        }
+    </style>
+</head>
+<body class="relative w-full h-full overflow-hidden select-none">
+
+    <div id="canvas-container" class="absolute inset-0 w-full h-full"></div>
+
+    <!-- HUD Layer -->
+    <div id="hud-overlay" class="absolute inset-0 pointer-events-none z-10 flex flex-col justify-between p-4">
+        
+        <!-- Top Bar Header -->
+        <div class="flex justify-between items-start w-full">
+            <!-- Player Stats Box -->
+            <div class="glass-panel p-3 rounded-2xl w-64 md:w-80 pointer-events-auto transition-all">
+                <div class="flex items-center gap-3 mb-2">
+                    <div id="player-avatar" class="w-12 h-12 rounded-xl bg-gradient-to-tr from-amber-600 to-yellow-400 flex items-center justify-center text-2xl border border-amber-300 shadow-lg">
+                        🐴
+                    </div>
+                    <div class="flex-1">
+                        <div class="flex justify-between items-center">
+                            <span id="player-name" class="font-cinzel font-bold text-amber-200 text-sm">Forest Horse</span>
+                            <span id="player-level" class="text-xs font-bold bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30">Lvl 1</span>
+                        </div>
+                        <div id="player-class" class="text-xs text-slate-400 font-medium">Forest Wanderer</div>
+                    </div>
+                </div>
+
+                <!-- Health Bar -->
+                <div class="mb-1.5">
+                    <div class="flex justify-between text-xs text-slate-300 font-semibold mb-0.5">
+                        <span><i class="fa-solid fa-heart text-red-500 mr-1"></i>HP</span>
+                        <span id="hp-text">100 / 100</span>
+                    </div>
+                    <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden border border-slate-700/50">
+                        <div id="hp-bar" class="bg-gradient-to-r from-red-600 to-rose-400 h-full w-full transition-all duration-300"></div>
+                    </div>
+                </div>
+
+                <!-- Mana Bar -->
+                <div class="mb-1.5">
+                    <div class="flex justify-between text-xs text-slate-300 font-semibold mb-0.5">
+                        <span><i class="fa-solid fa-bolt text-cyan-400 mr-1"></i>MP</span>
+                        <span id="mp-text">50 / 50</span>
+                    </div>
+                    <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden border border-slate-700/50">
+                        <div id="mp-bar" class="bg-gradient-to-r from-cyan-600 to-blue-400 h-full w-full transition-all duration-300"></div>
+                    </div>
+                </div>
+
+                <!-- XP Bar -->
+                <div>
+                    <div class="flex justify-between text-xs text-slate-400 mb-0.5">
+                        <span><i class="fa-solid fa-star text-amber-400 mr-1"></i>XP</span>
+                        <span id="xp-text">0 / 100</span>
+                    </div>
+                    <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden border border-slate-700/50">
+                        <div id="xp-bar" class="bg-gradient-to-r from-amber-500 to-yellow-300 h-full w-0 transition-all duration-300"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Title & Menu Action Bar -->
+            <div class="flex flex-col items-center gap-2">
+                <div class="glass-panel px-4 py-2 rounded-xl text-center border-amber-500/20">
+                    <h1 class="font-cinzel text-lg md:text-xl font-black bg-gradient-to-r from-amber-200 via-teal-200 to-cyan-300 bg-clip-text text-transparent tracking-wide">
+                        21. LEGEND OF THE SEA HORSE
+                    </h1>
+                </div>
+
+                <div class="flex gap-2 pointer-events-auto">
+                    <button id="btn-story" class="glass-panel hover:bg-slate-700/60 text-amber-300 text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition">
+                        <i class="fa-solid fa-book-open"></i> <span class="hidden sm:inline">Story & Legend</span>
+                    </button>
+                    <button id="btn-inventory" class="glass-panel hover:bg-slate-700/60 text-cyan-300 text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition">
+                        <i class="fa-solid fa-bag-shopping"></i> <span class="hidden sm:inline">Inventory</span>
+                    </button>
+                    <button id="btn-skills" class="glass-panel hover:bg-slate-700/60 text-purple-300 text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> <span class="hidden sm:inline">Skills</span>
+                    </button>
+                    <button id="btn-cam-toggle" class="glass-panel hover:bg-slate-700/60 text-emerald-300 text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition">
+                        <i class="fa-solid fa-video"></i> <span id="cam-mode-text">3rd Person</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Mini Map & Sound Controls -->
+            <div class="flex flex-col items-end gap-2">
+                <div class="glass-panel p-2 rounded-2xl relative overflow-hidden pointer-events-auto w-28 h-28 md:w-36 md:h-36 border border-slate-700">
+                    <canvas id="minimap-canvas" class="w-full h-full rounded-xl bg-slate-900/90"></canvas>
+                    <div class="absolute top-1 right-2 text-[10px] text-slate-400 font-bold">RADAR</div>
+                </div>
+                <button id="btn-sound" class="glass-panel hover:bg-slate-700/60 text-slate-300 text-xs p-2 rounded-full pointer-events-auto transition">
+                    <i id="sound-icon" class="fa-solid fa-volume-high w-4 h-4 text-center"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Quest Tracker Floating Box -->
+        <div class="glass-panel p-3 rounded-xl max-w-xs md:max-w-sm pointer-events-auto border-l-4 border-l-amber-500 mt-2">
+            <div class="text-xs font-bold text-amber-300 flex items-center justify-between mb-1">
+                <span><i class="fa-solid fa-compass mr-1"></i> ACTIVE QUEST</span>
+                <span id="quest-step-count" class="text-[10px] text-slate-400">Step 1/3</span>
+            </div>
+            <div id="quest-title" class="font-bold text-sm text-slate-100">The Forest Warning</div>
+            <p id="quest-desc" class="text-xs text-slate-300 mt-0.5 leading-snug">Find and speak with the Elder Horse near the ancient forest tree to learn about the legend waters.</p>
+        </div>
+
+        <!-- Bottom Controls Bar / On-Screen Touch Buttons -->
+        <div class="flex justify-between items-end w-full">
+            <!-- Joystick Zone for Touch / Mobile -->
+            <div id="joystick-zone" class="w-32 h-32 relative pointer-events-auto sm:hidden flex items-center justify-center rounded-full bg-slate-800/40 border border-slate-600/30">
+                <div id="joystick-knob" class="w-12 h-12 rounded-full bg-gradient-to-tr from-amber-500 to-amber-300 shadow-md"></div>
+            </div>
+
+            <!-- Desktop Keyboard Hints / Action Bar -->
+            <div class="hidden sm:flex glass-panel px-4 py-2 rounded-xl text-xs gap-4 text-slate-300 pointer-events-auto">
+                <div><kbd class="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-600 text-amber-300">WASD</kbd> Move</div>
+                <div><kbd class="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-600 text-amber-300">SPACE</kbd> Jump / Swim Up</div>
+                <div><kbd class="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-600 text-amber-300">SHIFT</kbd> Sprint</div>
+                <div><kbd class="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-600 text-amber-300">J</kbd> Melee Attack</div>
+                <div><kbd class="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-600 text-amber-300">K</kbd> Water Blast</div>
+                <div><kbd class="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-600 text-amber-300">E</kbd> Interact</div>
+            </div>
+
+            <!-- Mobile Attack & Interaction Buttons -->
+            <div class="flex gap-3 pointer-events-auto sm:hidden">
+                <button id="btn-mobile-interact" class="w-12 h-12 rounded-full bg-amber-600/80 active:bg-amber-500 text-white font-bold flex items-center justify-center shadow-lg border border-amber-300 hidden">
+                    <i class="fa-solid fa-comment text-lg"></i>
+                </button>
+                <button id="btn-mobile-skill" class="w-12 h-12 rounded-full bg-cyan-600/80 active:bg-cyan-500 text-white font-bold flex items-center justify-center shadow-lg border border-cyan-300">
+                    <i class="fa-solid fa-water text-lg"></i>
+                </button>
+                <button id="btn-mobile-attack" class="w-14 h-14 rounded-full bg-red-600/80 active:bg-red-500 text-white font-bold flex items-center justify-center shadow-lg border border-red-300">
+                    <i class="fa-solid fa-burst text-xl"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- STORY & LEGEND MODAL -->
+    <div id="modal-story" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-30 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel rounded-2xl max-w-2xl w-full p-6 relative border border-amber-500/40 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <button class="btn-close-modal absolute top-4 right-4 text-slate-400 hover:text-white text-xl">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            
+            <div class="text-center mb-6">
+                <div class="text-amber-400 text-xs font-bold uppercase tracking-widest mb-1">March 8 2017</div>
+                <h2 class="font-cinzel text-2xl md:text-3xl font-black text-amber-200">Chapter 13</h2>
+                <h3 class="font-cinzel text-xl text-teal-300 font-bold">Legend of the Sea Horse</h3>
+                <div class="text-slate-400 text-xs mt-1">By Sea Schwartz</div>
+            </div>
+
+            <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-800 text-slate-200 text-sm md:text-base leading-relaxed mb-6 font-serif italic text-justify">
+                "Once upon a time there live a colony of horses in the land of a forest suddenly all of them run only in land but few of them run towards water this waters contains a legends when the horse runs within waters if will change to seahorse it will change horse to seahorse in the land when ew of the seahorse runs into the water it will makes legend horse turns to seahorse and by means of swimming can’t run anymore but it will change feet to tail already to swim faster than running when seahorse learn that they disobey don’t run to waters but few or horses do it horse will becomes a seahorse it can change anymore turns to small seahorse also."
+            </div>
+
+            <div class="bg-amber-950/40 border border-amber-500/30 p-4 rounded-xl flex items-start gap-3">
+                <div class="text-amber-400 text-2xl mt-0.5"><i class="fa-solid fa-quote-left"></i></div>
+                <div>
+                    <div class="text-amber-300 font-bold text-xs uppercase tracking-wider mb-0.5">Moral Lesson</div>
+                    <p class="text-amber-100 text-xs md:text-sm italic font-medium">
+                        "Don’t run in waters if you disobey you can’t run in land already just stay in waters the feet will change to tails forever."
+                    </p>
+                </div>
+            </div>
+
+            <div class="mt-6 text-center">
+                <button class="btn-close-modal bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-slate-950 font-bold px-6 py-2.5 rounded-xl text-sm transition shadow-lg">
+                    Return to World
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- NPC DIALOGUE MODAL -->
+    <div id="modal-dialogue" class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-30 flex items-end sm:items-center justify-center p-4 hidden">
+        <div class="glass-panel rounded-2xl max-w-xl w-full p-6 relative border border-cyan-500/40 shadow-2xl">
+            <div class="flex items-center gap-4 mb-4">
+                <div id="npc-avatar" class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-cyan-600 to-teal-400 flex items-center justify-center text-3xl border border-cyan-300">
+                    🧙‍♂️
+                </div>
+                <div>
+                    <h3 id="npc-name" class="font-cinzel font-bold text-lg text-cyan-200">Elder Horse Sentinel</h3>
+                    <div id="npc-title" class="text-xs text-slate-400">Guardian of the Forest Colony</div>
+                </div>
+            </div>
+
+            <p id="npc-speech" class="text-slate-200 text-sm md:text-base leading-relaxed bg-slate-900/50 p-4 rounded-xl border border-slate-800 mb-6">
+                Greetings, young stallion! Beware of the glowing blue waters near the edge of our woods. It is said in the ancient legends that entering it permanently transforms our kind into sea creatures!
+            </p>
+
+            <div class="flex justify-end gap-3">
+                <button id="btn-dialogue-action" class="bg-gradient-to-r from-cyan-600 to-blue-500 hover:from-cyan-500 hover:to-blue-400 text-white font-bold px-6 py-2 rounded-xl text-sm transition shadow-lg">
+                    Accept Quest
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- INVENTORY MODAL -->
+    <div id="modal-inventory" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-30 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel rounded-2xl max-w-2xl w-full p-6 relative border border-slate-700 shadow-2xl">
+            <button class="btn-close-modal absolute top-4 right-4 text-slate-400 hover:text-white text-xl">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <h2 class="font-cinzel text-xl font-bold text-slate-100 mb-4 flex items-center gap-2">
+                <i class="fa-solid fa-bag-shopping text-cyan-400"></i> Inventory & Equipment
+            </h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- Equipment Slots -->
+                <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800 flex flex-col gap-3">
+                    <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">Equipment</div>
+                    
+                    <div class="flex items-center gap-3 p-2 bg-slate-800/50 rounded-lg border border-slate-700">
+                        <div class="w-10 h-10 rounded-lg bg-amber-500/20 text-amber-300 flex items-center justify-center text-lg border border-amber-500/40">
+                            🛡️
+                        </div>
+                        <div>
+                            <div class="text-xs font-bold text-slate-200">Legend Saddle</div>
+                            <div class="text-[10px] text-amber-400">+15 Defense</div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-3 p-2 bg-slate-800/50 rounded-lg border border-slate-700">
+                        <div class="w-10 h-10 rounded-lg bg-cyan-500/20 text-cyan-300 flex items-center justify-center text-lg border border-cyan-500/40">
+                            👑
+                        </div>
+                        <div>
+                            <div class="text-xs font-bold text-slate-200">Sea Helmet</div>
+                            <div class="text-[10px] text-cyan-400">+20 Swim Speed</div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-3 p-2 bg-slate-800/50 rounded-lg border border-slate-700">
+                        <div class="w-10 h-10 rounded-lg bg-purple-500/20 text-purple-300 flex items-center justify-center text-lg border border-purple-500/40">
+                            🔮
+                        </div>
+                        <div>
+                            <div class="text-xs font-bold text-slate-200">Ocean Pearl Artifact</div>
+                            <div class="text-[10px] text-purple-400">+25 Magic Power</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bag Grid -->
+                <div class="md:col-span-2 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                    <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Item Bag</div>
+                    <div id="inventory-grid" class="grid grid-cols-4 gap-2">
+                        <!-- Items generated via JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SKILLS MODAL -->
+    <div id="modal-skills" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-30 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel rounded-2xl max-w-xl w-full p-6 relative border border-purple-500/40 shadow-2xl">
+            <button class="btn-close-modal absolute top-4 right-4 text-slate-400 hover:text-white text-xl">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <h2 class="font-cinzel text-xl font-bold text-purple-200 mb-4 flex items-center gap-2">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> Skill Progression
+            </h2>
+
+            <div class="flex justify-between items-center bg-purple-950/40 p-3 rounded-xl border border-purple-500/30 mb-4">
+                <span class="text-xs text-purple-300 font-bold">Skill Points Available:</span>
+                <span id="skill-points-count" class="text-lg font-black text-amber-300">0</span>
+            </div>
+
+            <div class="space-y-3">
+                <div class="p-3 bg-slate-900/60 rounded-xl border border-slate-800 flex justify-between items-center">
+                    <div>
+                        <div class="text-sm font-bold text-slate-200">Hoof Smash / Tail Strike</div>
+                        <div class="text-xs text-slate-400">Increases basic melee damage by 15%</div>
+                    </div>
+                    <button class="btn-upgrade-skill bg-purple-600 hover:bg-purple-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition" data-skill="melee">
+                        Upgrade
+                    </button>
+                </div>
+
+                <div class="p-3 bg-slate-900/60 rounded-xl border border-slate-800 flex justify-between items-center">
+                    <div>
+                        <div class="text-sm font-bold text-slate-200">Tidal Surge Blast</div>
+                        <div class="text-xs text-slate-400">Ranged magic burst that pushes back enemies</div>
+                    </div>
+                    <button class="btn-upgrade-skill bg-purple-600 hover:bg-purple-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition" data-skill="blast">
+                        Upgrade
+                    </button>
+                </div>
+
+                <div class="p-3 bg-slate-900/60 rounded-xl border border-slate-800 flex justify-between items-center">
+                    <div>
+                        <div class="text-sm font-bold text-slate-200">Ocean Speed Boost</div>
+                        <div class="text-xs text-slate-400">Boosts swimming speed in water by 25%</div>
+                    </div>
+                    <button class="btn-upgrade-skill bg-purple-600 hover:bg-purple-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition" data-skill="speed">
+                        Upgrade
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- GAME OVER / RESTART NOTIFICATION -->
+    <div id="modal-gameover" class="fixed inset-0 bg-red-950/90 backdrop-blur-md z-40 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel rounded-2xl max-w-md w-full p-6 text-center border border-red-500/50">
+            <div class="text-5xl mb-3">💀</div>
+            <h2 class="font-cinzel text-2xl font-black text-red-400 mb-2">You Have Fallen</h2>
+            <p class="text-slate-300 text-sm mb-6">The creatures of the realm overwhelmed you. Your legend shall be remembered!</p>
+            <button id="btn-respawn" class="bg-red-600 hover:bg-red-500 text-white font-bold px-6 py-2.5 rounded-xl text-sm transition shadow-lg">
+                Respawn at Forest
+            </button>
+        </div>
+    </div>
+
+    <script>
+        /* --- AUDIO SYNTHESIS ENGINE (Web Audio API) --- */
+        class SoundEngine {
+            constructor() {
+                this.ctx = null;
+                this.muted = false;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+
+            playHit() {
+                if (this.muted || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(30, this.ctx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.15);
+            }
+
+            playWaterSplash() {
+                if (this.muted || !this.ctx) return;
+                const bufferSize = this.ctx.sampleRate * 0.3;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.setValueAtTime(800, this.ctx.currentTime);
+                filter.Q.setValueAtTime(3, this.ctx.currentTime);
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                noise.start();
+            }
+
+            playLevelUp() {
+                if (this.muted || !this.ctx) return;
+                const notes = [261.63, 329.63, 392.00, 523.25];
+                notes.forEach((freq, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.value = freq;
+                    gain.gain.setValueAtTime(0.2, this.ctx.currentTime + idx * 0.1);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + idx * 0.1 + 0.3);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(this.ctx.currentTime + idx * 0.1);
+                    osc.stop(this.ctx.currentTime + idx * 0.1 + 0.3);
+                });
+            }
+        }
+
+        const audio = new SoundEngine();
+
+        /* --- GAME STATE & SYSTEM --- */
+        const gameState = {
+            player: {
+                level: 1,
+                hp: 100,
+                maxHp: 100,
+                mp: 50,
+                maxMp: 50,
+                xp: 0,
+                nextXp: 100,
+                skillPoints: 0,
+                form: 'horse', // 'horse' or 'seahorse'
+                position: new THREE.Vector3(0, 0, 15),
+                rotationY: 0,
+                speed: 12,
+                meleeDmg: 20,
+                blastDmg: 35,
+                isTransformed: false
+            },
+            quest: {
+                step: 1,
+                title: "The Forest Warning",
+                desc: "Find and speak with the Elder Horse near the ancient forest tree to learn about the legend waters."
+            },
+            inventory: [
+                { id: 'berry', name: 'Forest Berry', icon: '🫐', count: 3, desc: 'Restores 30 HP' },
+                { id: 'shell', name: 'Sea Shell', icon: '🐚', count: 1, desc: 'Mystic ocean relic' },
+                { id: 'pearl', name: 'Glow Pearl', icon: '🔮', count: 1, desc: 'Enhances magic power' }
+            ],
+            cameraMode: '3rd', // '3rd' or '1st'
+            keys: {},
+            touchInput: { x: 0, y: 0 }
+        };
+
+        // Three.js Core Variables
+        let scene, camera, renderer, clock;
+        let playerGroup, horseMesh, seaHorseMesh;
+        let waterMesh, terrainMesh;
+        let npcs = [];
+        let enemies = [];
+        let projectiles = [];
+        let particles = [];
+
+        function init3D() {
+            const container = document.getElementById('canvas-container');
+            
+            // Scene Setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0f172a);
+            scene.fog = new THREE.FogExp2(0x0f172a, 0.008);
+
+            // Camera Setup
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            clock = new THREE.Clock();
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xcce0ff, 0.6);
+            scene.add(ambientLight);
+
+            const sunLight = new THREE.DirectionalLight(0xfffaed, 1.2);
+            sunLight.position.set(50, 100, 30);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            sunLight.shadow.camera.near = 0.5;
+            sunLight.shadow.camera.far = 300;
+            const d = 100;
+            sunLight.shadow.camera.left = -d;
+            sunLight.shadow.camera.right = d;
+            sunLight.shadow.camera.top = d;
+            sunLight.shadow.camera.bottom = -d;
+            scene.add(sunLight);
+
+            // Water Light Glow
+            const waterLight = new THREE.PointLight(0x00f0ff, 1.5, 80);
+            waterLight.position.set(0, -2, -40);
+            scene.add(waterLight);
+
+            // Build Environment
+            createTerrainAndWater();
+            createTreesAndFoliage();
+
+            // Build Player Models
+            createPlayerModels();
+
+            // Spawn Entities
+            spawnNPCs();
+            spawnEnemies();
+
+            // Window Resize Listener
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function createTerrainAndWater() {
+            // Ground Mesh
+            const groundGeo = new THREE.PlaneGeometry(250, 250, 64, 64);
+            groundGeo.rotateX(-Math.PI / 2);
+            
+            const pos = groundGeo.attributes.position;
+            for (let i = 0; i < pos.count; i++) {
+                const x = pos.getX(i);
+                const z = pos.getZ(i);
+                
+                // Sloping into water on negative Z
+                let y = Math.sin(x * 0.05) * 1.5 + Math.cos(z * 0.05) * 1.5;
+                if (z < -10) {
+                    y -= (Math.abs(z + 10) * 0.35); // Slope downwards into water
+                }
+                pos.setY(i, y);
+            }
+            groundGeo.computeVertexNormals();
+
+            const groundMat = new THREE.MeshStandardMaterial({
+                color: 0x2e5a27,
+                roughness: 0.8,
+                metalness: 0.1,
+                flatShading: true
+            });
+
+            terrainMesh = new THREE.Mesh(groundGeo, groundMat);
+            terrainMesh.receiveShadow = true;
+            scene.add(terrainMesh);
+
+            // Water Mesh
+            const waterGeo = new THREE.PlaneGeometry(250, 150);
+            waterGeo.rotateX(-Math.PI / 2);
+            const waterMat = new THREE.MeshStandardMaterial({
+                color: 0x0077be,
+                transparent: true,
+                opacity: 0.75,
+                roughness: 0.1,
+                metalness: 0.8
+            });
+
+            waterMesh = new THREE.Mesh(waterGeo, waterMat);
+            waterMesh.position.set(0, -3.5, -75);
+            scene.add(waterMesh);
+        }
+
+        function createTreesAndFoliage() {
+            const trunkGeo = new THREE.CylinderGeometry(0.4, 0.6, 4, 6);
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5c4033 });
+            const foliageGeo = new THREE.ConeGeometry(2.5, 6, 6);
+            const foliageMat = new THREE.MeshStandardMaterial({ color: 0x1e4620, flatShading: true });
+
+            // Random Forest Trees on Land (Z > 0)
+            for (let i = 0; i < 45; i++) {
+                const tree = new THREE.Group();
+                const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+                trunk.position.y = 2;
+                trunk.castShadow = true;
+
+                const foliage = new THREE.Mesh(foliageGeo, foliageMat);
+                foliage.position.y = 5;
+                foliage.castShadow = true;
+
+                tree.add(trunk);
+                tree.add(foliage);
+
+                const x = (Math.random() - 0.5) * 180;
+                const z = Math.random() * 80 + 5;
+                tree.position.set(x, 0, z);
+
+                const scale = 0.8 + Math.random() * 0.6;
+                tree.scale.set(scale, scale, scale);
+
+                scene.add(tree);
+            }
+
+            // Mystic Water Coral / Seaweeds on Water Bed (Z < -30)
+            const coralGeo = new THREE.DodecahedronGeometry(1.2);
+            const coralMat = new THREE.MeshStandardMaterial({ color: 0x00e5ff, emissive: 0x004466 });
+            for (let i = 0; i < 20; i++) {
+                const coral = new THREE.Mesh(coralGeo, coralMat);
+                coral.position.set((Math.random() - 0.5) * 160, -12, -30 - Math.random() * 80);
+                scene.add(coral);
+            }
+        }
+
+        function createPlayerModels() {
+            playerGroup = new THREE.Group();
+
+            /* --- 1. HORSE FORM (4 LEGS) --- */
+            horseMesh = new THREE.Group();
+            
+            // Body
+            const bodyGeo = new THREE.BoxGeometry(1.4, 1.2, 2.5);
+            const horseMat = new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.6 });
+            const body = new THREE.Mesh(bodyGeo, horseMat);
+            body.position.y = 1.6;
+            body.castShadow = true;
+            horseMesh.add(body);
+
+            // Neck & Head
+            const neckGeo = new THREE.BoxGeometry(0.8, 1.2, 0.8);
+            const neck = new THREE.Mesh(neckGeo, horseMat);
+            neck.position.set(0, 2.4, -0.9);
+            neck.rotation.x = -Math.PI / 6;
+            horseMesh.add(neck);
+
+            const headGeo = new THREE.BoxGeometry(0.7, 0.7, 1.2);
+            const head = new THREE.Mesh(headGeo, horseMat);
+            head.position.set(0, 2.8, -1.4);
+            horseMesh.add(head);
+
+            // Mane
+            const maneGeo = new THREE.BoxGeometry(0.2, 1.4, 0.6);
+            const maneMat = new THREE.MeshStandardMaterial({ color: 0x3d2314 });
+            const mane = new THREE.Mesh(maneGeo, maneMat);
+            mane.position.set(0, 2.6, -0.8);
+            horseMesh.add(mane);
+
+            // 4 Legs
+            const legGeo = new THREE.CylinderGeometry(0.2, 0.15, 1.6);
+            const legMat = new THREE.MeshStandardMaterial({ color: 0x5c2e0b });
+            const legPositions = [
+                [-0.5, 0.8, 0.9], [0.5, 0.8, 0.9],
+                [-0.5, 0.8, -0.8], [0.5, 0.8, -0.8]
+            ];
+
+            legPositions.forEach(pos => {
+                const leg = new THREE.Mesh(legGeo, legMat);
+                leg.position.set(...pos);
+                leg.castShadow = true;
+                horseMesh.add(leg);
+            });
+
+            /* --- 2. SEA HORSE FORM (TAIL & CREST) --- */
+            seaHorseMesh = new THREE.Group();
+
+            const seaMat = new THREE.MeshStandardMaterial({
+                color: 0x00d2ff,
+                roughness: 0.3,
+                metalness: 0.5,
+                emissive: 0x003355
+            });
+
+            // Curved Torso
+            const seaTorsoGeo = new THREE.CylinderGeometry(0.8, 0.5, 2.2, 8);
+            const seaTorso = new THREE.Mesh(seaTorsoGeo, seaMat);
+            seaTorso.position.y = 1.8;
+            seaHorseMesh.add(seaTorso);
+
+            // Coiled Tail
+            const tailGeo = new THREE.TorusGeometry(0.7, 0.25, 8, 16, Math.PI * 1.5);
+            const tail = new THREE.Mesh(tailGeo, seaMat);
+            tail.position.set(0, 0.6, 0.4);
+            tail.rotation.x = Math.PI / 2;
+            seaHorseMesh.add(tail);
+
+            // Head & Crown
+            const seaHeadGeo = new THREE.ConeGeometry(0.6, 1.4, 8);
+            const seaHead = new THREE.Mesh(seaHeadGeo, seaMat);
+            seaHead.position.set(0, 2.8, -0.5);
+            seaHead.rotation.x = -Math.PI / 3;
+            seaHorseMesh.add(seaHead);
+
+            // Glowing Dorsal Fin
+            const finGeo = new THREE.BufferGeometry();
+            const finVertices = new Float32Array([
+                0, 1.2, 0.5,
+                0, 2.4, 1.2,
+                0, 1.0, 1.4
+            ]);
+            finGeo.setAttribute('position', new THREE.BufferAttribute(finVertices, 3));
+            const finMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, side: THREE.DoubleSide });
+            const fin = new THREE.Mesh(finGeo, finMat);
+            seaHorseMesh.add(fin);
+
+            // Initially set horse active
+            playerGroup.add(horseMesh);
+            playerGroup.position.copy(gameState.player.position);
+            scene.add(playerGroup);
+        }
+
+        function spawnNPCs() {
+            // Elder Horse NPC near start
+            const npcGroup = new THREE.Group();
+            
+            const npcMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, roughness: 0.4 });
+            const body = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.3, 2.6), npcMat);
+            body.position.y = 1.6;
+            npcGroup.add(body);
+
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 1.2), npcMat);
+            head.position.set(0, 2.8, -1.4);
+            npcGroup.add(head);
+
+            // Quest Indicator Floating Icon above NPC
+            const iconGeo = new THREE.SphereGeometry(0.4, 8, 8);
+            const iconMat = new THREE.MeshBasicMaterial({ color: 0xffd700 });
+            const questIcon = new THREE.Mesh(iconGeo, iconMat);
+            questIcon.position.set(0, 4.2, 0);
+            npcGroup.add(questIcon);
+
+            npcGroup.position.set(5, 0, 10);
+            scene.add(npcGroup);
+
+            npcs.push({
+                name: "Elder Horse Sentinel",
+                title: "Guardian of the Forest Colony",
+                speech: "Greetings, brave stallion! Look upon the glowing azure ocean ahead. Legend holds that any horse who ventures into those magical waters shall be transformed into a Sea Horse forever!",
+                group: npcGroup,
+                type: 'elder'
+            });
+        }
+
+        function spawnEnemies() {
+            // Shadow Wolf on Land
+            const wolfGeo = new THREE.BoxGeometry(1.2, 1, 1.8);
+            const wolfMat = new THREE.MeshStandardMaterial({ color: 0x331122, roughness: 0.5 });
+            const wolfMesh = new THREE.Mesh(wolfGeo, wolfMat);
+            wolfMesh.position.set(-20, 1, 5);
+            scene.add(wolfMesh);
+
+            enemies.push({
+                name: "Corrupt Shadow Wolf",
+                hp: 60,
+                maxHp: 60,
+                mesh: wolfMesh,
+                type: 'land',
+                speed: 4,
+                attackDmg: 8
+            });
+
+            // Grand Leviathan Water Boss in Deep Ocean
+            const bossGeo = new THREE.ConeGeometry(3, 8, 8);
+            const bossMat = new THREE.MeshStandardMaterial({ color: 0x002244, emissive: 0x0088aa });
+            const bossMesh = new THREE.Mesh(bossGeo, bossMat);
+            bossMesh.position.set(0, -10, -80);
+            bossMesh.rotation.x = Math.PI / 4;
+            scene.add(bossMesh);
+
+            enemies.push({
+                name: "Dark Sea Leviathan",
+                hp: 250,
+                maxHp: 250,
+                mesh: bossMesh,
+                type: 'water',
+                speed: 5,
+                attackDmg: 18,
+                isBoss: true
+            });
+        }
+
+        // Keyboard Input Listeners
+        window.addEventListener('keydown', (e) => {
+            audio.init();
+            gameState.keys[e.key.toLowerCase()] = true;
+
+            if (e.key === ' ' || e.code === 'Space') {
+                performJumpOrSwim();
+            }
+            if (e.key.toLowerCase() === 'j') performMeleeAttack();
+            if (e.key.toLowerCase() === 'k') performWaterBlast();
+            if (e.key.toLowerCase() === 'e') checkInteraction();
+        });
+
+        window.addEventListener('keyup', (e) => {
+            gameState.keys[e.key.toLowerCase()] = false;
+        });
+
+        // Touch Joystick Logic
+        const joystickZone = document.getElementById('joystick-zone');
+        const joystickKnob = document.getElementById('joystick-knob');
+        let joystickActive = false;
+        let joyTouchId = null;
+
+        if (joystickZone) {
+            joystickZone.addEventListener('touchstart', (e) => {
+                audio.init();
+                const touch = e.changedTouches[0];
+                joyTouchId = touch.identifier;
+                joystickActive = true;
+                updateJoystick(touch);
+            });
+
+            window.addEventListener('touchmove', (e) => {
+                if (!joystickActive) return;
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    if (e.changedTouches[i].identifier === joyTouchId) {
+                        updateJoystick(e.changedTouches[i]);
+                        break;
+                    }
+                }
+            });
+
+            window.addEventListener('touchend', (e) => {
+                if (!joystickActive) return;
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    if (e.changedTouches[i].identifier === joyTouchId) {
+                        joystickActive = false;
+                        gameState.touchInput = { x: 0, y: 0 };
+                        joystickKnob.style.transform = `translate(0px, 0px)`;
+                        break;
+                    }
+                }
+            });
+        }
+
+        function updateJoystick(touch) {
+            const rect = joystickZone.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            
+            let dx = touch.clientX - centerX;
+            let dy = touch.clientY - centerY;
+            const maxRadius = rect.width / 2 - 10;
+            const distance = Math.hypot(dx, dy);
+
+            if (distance > maxRadius) {
+                dx = (dx / distance) * maxRadius;
+                dy = (dy / distance) * maxRadius;
+            }
+
+            joystickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+            gameState.touchInput.x = dx / maxRadius;
+            gameState.touchInput.y = dy / maxRadius;
+        }
+
+        function updatePlayer(delta) {
+            const player = gameState.player;
+            let moveX = 0;
+            let moveZ = 0;
+
+            // Keyboard Movement
+            if (gameState.keys['w'] || gameState.keys['arrowup']) moveZ -= 1;
+            if (gameState.keys['s'] || gameState.keys['arrowdown']) moveZ += 1;
+            if (gameState.keys['a'] || gameState.keys['arrowleft']) moveX -= 1;
+            if (gameState.keys['d'] || gameState.keys['arrowright']) moveX += 1;
+
+            // Touch Joystick Override
+            if (gameState.touchInput.x !== 0 || gameState.touchInput.y !== 0) {
+                moveX = gameState.touchInput.x;
+                moveZ = gameState.touchInput.y;
+            }
+
+            const isSprinting = gameState.keys['shift'];
+            const curSpeed = (isSprinting ? player.speed * 1.5 : player.speed) * delta;
+
+            if (moveX !== 0 || moveZ !== 0) {
+                const angle = Math.atan2(moveX, moveZ);
+                player.rotationY = angle;
+                playerGroup.rotation.y = angle;
+
+                player.position.x += Math.sin(angle) * curSpeed;
+                player.position.z += Math.cos(angle) * curSpeed;
+            }
+
+            // Check Water Boundaries & Transformation
+            const inWater = player.position.z < -10;
+
+            if (inWater && player.form !== 'seahorse') {
+                // Transform into Sea Horse
+                player.form = 'seahorse';
+                player.isTransformed = true;
+                playerGroup.remove(horseMesh);
+                playerGroup.add(seaHorseMesh);
+
+                document.getElementById('player-avatar').innerText = '🦄';
+                document.getElementById('player-name').innerText = 'Legend Sea Horse';
+                document.getElementById('player-class').innerText = 'Aquatic Guardian';
+
+                audio.playWaterSplash();
+                createParticleBurst(player.position, 0x00f0ff);
+
+                // Quest Progress Trigger
+                if (gameState.quest.step === 2) {
+                    advanceQuest(3, "Aquatic Guardian", "Defeat the Dark Sea Leviathan in the ocean depths!");
+                }
+            } else if (!inWater && player.form !== 'horse') {
+                // Revert to Horse when returning to land
+                player.form = 'horse';
+                playerGroup.remove(seaHorseMesh);
+                playerGroup.add(horseMesh);
+
+                document.getElementById('player-avatar').innerText = '🐴';
+                document.getElementById('player-name').innerText = 'Forest Horse';
+                document.getElementById('player-class').innerText = 'Forest Wanderer';
+            }
+
+            // Vertical position / Swimming physics
+            if (inWater) {
+                // Swimming physics in ocean
+                player.position.y = Math.max(-15, Math.min(-2, player.position.y));
+            } else {
+                // Land height snapping
+                player.position.y = 0;
+            }
+
+            playerGroup.position.copy(player.position);
+
+            // Camera Tracking
+            if (gameState.cameraMode === '3rd') {
+                camera.position.set(
+                    player.position.x,
+                    player.position.y + 6,
+                    player.position.z + 14
+                );
+                camera.lookAt(player.position.x, player.position.y + 2, player.position.z);
+            } else {
+                // 1st Person Mode
+                camera.position.set(
+                    player.position.x,
+                    player.position.y + 2.8,
+                    player.position.z - 0.5
+                );
+                camera.lookAt(
+                    player.position.x + Math.sin(player.rotationY) * 10,
+                    player.position.y + 2.8,
+                    player.position.z + Math.cos(player.rotationY) * 10
+                );
+            }
+        }
+
+        function performJumpOrSwim() {
+            if (gameState.player.form === 'seahorse') {
+                gameState.player.position.y += 1.5; // Swim upwards
+            }
+        }
+
+        function performMeleeAttack() {
+            audio.playHit();
+            createParticleBurst(gameState.player.position, 0xffaa00);
+
+            // Check enemy hit proximity
+            enemies.forEach(enemy => {
+                const dist = gameState.player.position.distanceTo(enemy.mesh.position);
+                if (dist < 5 && enemy.hp > 0) {
+                    damageEnemy(enemy, gameState.player.meleeDmg);
+                }
+            });
+        }
+
+        function performWaterBlast() {
+            if (gameState.player.mp < 15) return;
+            gameState.player.mp -= 15;
+            updateHUD();
+
+            audio.playWaterSplash();
+
+            // Spawn Projectile
+            const projGeo = new THREE.SphereGeometry(0.5, 8, 8);
+            const projMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+            const proj = new THREE.Mesh(projGeo, projMat);
+            proj.position.copy(gameState.player.position);
+            proj.position.y += 1.5;
+
+            const dir = new THREE.Vector3(
+                Math.sin(gameState.player.rotationY),
+                0,
+                Math.cos(gameState.player.rotationY)
+            );
+
+            scene.add(proj);
+            projectiles.push({ mesh: proj, dir: dir, life: 1.5 });
+        }
+
+        function damageEnemy(enemy, dmg) {
+            enemy.hp -= dmg;
+            showFloatingText(`-${dmg}`, enemy.mesh.position, '#ef4444');
+
+            if (enemy.hp <= 0) {
+                enemy.hp = 0;
+                scene.remove(enemy.mesh);
+                gainXP(enemy.isBoss ? 150 : 40);
+
+                if (enemy.isBoss && gameState.quest.step === 3) {
+                    advanceQuest(3, "Legend Accomplished!", "You saved the colony and fulfilled the Legend of the Sea Horse!");
+                }
+            }
+        }
+
+        function gainXP(amount) {
+            const p = gameState.player;
+            p.xp += amount;
+            if (p.xp >= p.nextXp) {
+                p.xp -= p.nextXp;
+                p.level++;
+                p.nextXp = Math.floor(p.nextXp * 1.5);
+                p.maxHp += 20;
+                p.hp = p.maxHp;
+                p.skillPoints += 1;
+                audio.playLevelUp();
+                showFloatingText(`LEVEL UP!`, p.position, '#f59e0b');
+            }
+            updateHUD();
+        }
+
+        function checkInteraction() {
+            npcs.forEach(npc => {
+                const dist = gameState.player.position.distanceTo(npc.group.position);
+                if (dist < 6) {
+                    openDialogue(npc);
+                }
+            });
+        }
+
+        function openDialogue(npc) {
+            document.getElementById('npc-name').innerText = npc.name;
+            document.getElementById('npc-title').innerText = npc.title;
+            document.getElementById('npc-speech').innerText = npc.speech;
+            document.getElementById('modal-dialogue').classList.remove('hidden');
+
+            const btnAction = document.getElementById('btn-dialogue-action');
+            btnAction.onclick = () => {
+                document.getElementById('modal-dialogue').classList.add('hidden');
+                if (gameState.quest.step === 1) {
+                    advanceQuest(2, "The Forbidden Dip", "Approach and enter the glowing legendary water to experience transformation!");
+                }
+            };
+        }
+
+        function advanceQuest(step, title, desc) {
+            gameState.quest.step = step;
+            gameState.quest.title = title;
+            gameState.quest.desc = desc;
+
+            document.getElementById('quest-step-count').innerText = `Step ${step}/3`;
+            document.getElementById('quest-title').innerText = title;
+            document.getElementById('quest-desc').innerText = desc;
+        }
+
+        function createParticleBurst(pos, colorHex) {
+            const pGeo = new THREE.SphereGeometry(0.15, 4, 4);
+            const pMat = new THREE.MeshBasicMaterial({ color: colorHex });
+
+            for (let i = 0; i < 10; i++) {
+                const p = new THREE.Mesh(pGeo, pMat);
+                p.position.copy(pos);
+                p.position.x += (Math.random() - 0.5) * 2;
+                p.position.y += Math.random() * 2;
+                p.position.z += (Math.random() - 0.5) * 2;
+                scene.add(p);
+                particles.push({ mesh: p, life: 0.5 });
+            }
+        }
+
+        function showFloatingText(text, pos3D, color) {
+            // Project 3D coordinate to HTML Screen
+            const vector = pos3D.clone();
+            vector.project(camera);
+
+            const x = (vector.x * .5 + .5) * window.innerWidth;
+            const y = (-(vector.y * .5) + .5) * window.innerHeight;
+
+            const el = document.createElement('div');
+            el.className = 'floating-damage';
+            el.style.left = `${x}px`;
+            el.style.top = `${y}px`;
+            el.style.color = color;
+            el.innerText = text;
+
+            document.body.appendChild(el);
+            setTimeout(() => el.remove(), 1000);
+        }
+
+        function updateHUD() {
+            const p = gameState.player;
+            document.getElementById('hp-text').innerText = `${Math.ceil(p.hp)} / ${p.maxHp}`;
+            document.getElementById('hp-bar').style.width = `${(p.hp / p.maxHp) * 100}%`;
+
+            document.getElementById('mp-text').innerText = `${Math.ceil(p.mp)} / ${p.maxMp}`;
+            document.getElementById('mp-bar').style.width = `${(p.mp / p.maxMp) * 100}%`;
+
+            document.getElementById('xp-text').innerText = `${p.xp} / ${p.nextXp}`;
+            document.getElementById('xp-bar').style.width = `${(p.xp / p.nextXp) * 100}%`;
+
+            document.getElementById('player-level').innerText = `Lvl ${p.level}`;
+            document.getElementById('skill-points-count').innerText = p.skillPoints;
+        }
+
+        function renderMinimap() {
+            const canvas = document.getElementById('minimap-canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 120;
+            canvas.height = 120;
+
+            ctx.clearRect(0, 0, 120, 120);
+
+            // Water / Land divide line
+            ctx.fillStyle = '#0284c7';
+            ctx.fillRect(0, 0, 120, 60);
+            ctx.fillStyle = '#15803d';
+            ctx.fillRect(0, 60, 120, 60);
+
+            const mapScale = 0.6;
+            const centerX = 60;
+            const centerY = 60;
+
+            // Player Marker
+            const px = centerX + gameState.player.position.x * mapScale;
+            const py = centerY + gameState.player.position.z * mapScale;
+
+            ctx.fillStyle = '#f59e0b';
+            ctx.beginPath();
+            ctx.arc(px, py, 4, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Enemies
+            ctx.fillStyle = '#ef4444';
+            enemies.forEach(e => {
+                if (e.hp > 0) {
+                    const ex = centerX + e.mesh.position.x * mapScale;
+                    const ey = centerY + e.mesh.position.z * mapScale;
+                    ctx.fillRect(ex - 2, ey - 2, 4, 4);
+                }
+            });
+        }
+
+        function populateInventoryUI() {
+            const grid = document.getElementById('inventory-grid');
+            grid.innerHTML = '';
+
+            gameState.inventory.forEach(item => {
+                const cell = document.createElement('div');
+                cell.className = 'p-2 bg-slate-800/80 rounded-xl border border-slate-700 flex flex-col items-center justify-center text-center hover:border-cyan-400 transition cursor-pointer';
+                cell.innerHTML = `
+                    <div class="text-2xl mb-1">${item.icon}</div>
+                    <div class="text-[10px] font-bold text-slate-200">${item.name}</div>
+                    <div class="text-[9px] text-cyan-400">x${item.count}</div>
+                `;
+                grid.appendChild(cell);
+            });
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = clock.getDelta();
+
+            // Update Systems
+            updatePlayer(delta);
+
+            // Update Projectiles
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                const p = projectiles[i];
+                p.mesh.position.addScaledVector(p.dir, 30 * delta);
+                p.life -= delta;
+
+                // Hit checks
+                enemies.forEach(enemy => {
+                    if (enemy.hp > 0 && p.mesh.position.distanceTo(enemy.mesh.position) < 3) {
+                        damageEnemy(enemy, gameState.player.blastDmg);
+                        p.life = 0;
+                    }
+                });
+
+                if (p.life <= 0) {
+                    scene.remove(p.mesh);
+                    projectiles.splice(i, 1);
+                }
+            }
+
+            // Update Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const pt = particles[i];
+                pt.life -= delta;
+                if (pt.life <= 0) {
+                    scene.remove(pt.mesh);
+                    particles.splice(i, 1);
+                }
+            }
+
+            // Passive Mana Regen
+            if (gameState.player.mp < gameState.player.maxMp) {
+                gameState.player.mp = Math.min(gameState.player.maxMp, gameState.player.mp + 5 * delta);
+                updateHUD();
+            }
+
+            renderMinimap();
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        window.onload = () => {
+            init3D();
+            populateInventoryUI();
+            updateHUD();
+
+            // Button Click Listeners
+            document.getElementById('btn-story').onclick = () => document.getElementById('modal-story').classList.remove('hidden');
+            document.getElementById('btn-inventory').onclick = () => document.getElementById('modal-inventory').classList.remove('hidden');
+            document.getElementById('btn-skills').onclick = () => document.getElementById('modal-skills').classList.remove('hidden');
+            
+            document.getElementById('btn-cam-toggle').onclick = () => {
+                gameState.cameraMode = gameState.cameraMode === '3rd' ? '1st' : '3rd';
+                document.getElementById('cam-mode-text').innerText = gameState.cameraMode === '3rd' ? '3rd Person' : '1st Person';
+            };
+
+            document.getElementById('btn-sound').onclick = () => {
+                audio.muted = !audio.muted;
+                const icon = document.getElementById('sound-icon');
+                icon.className = audio.muted ? 'fa-solid fa-volume-xmark w-4 h-4 text-center text-red-400' : 'fa-solid fa-volume-high w-4 h-4 text-center';
+            };
+
+            document.querySelectorAll('.btn-close-modal').forEach(btn => {
+                btn.onclick = (e) => e.target.closest('.fixed').classList.add('hidden');
+            });
+
+            // Action Buttons for Mobile
+            document.getElementById('btn-mobile-attack').onclick = () => performMeleeAttack();
+            document.getElementById('btn-mobile-skill').onclick = () => performWaterBlast();
+
+            // Skill Upgrade Buttons
+            document.querySelectorAll('.btn-upgrade-skill').forEach(btn => {
+                btn.onclick = () => {
+                    if (gameState.player.skillPoints > 0) {
+                        gameState.player.skillPoints--;
+                        gameState.player.meleeDmg += 5;
+                        gameState.player.blastDmg += 10;
+                        updateHUD();
+                    }
+                };
+            });
+
+            // Respawn Button
+            document.getElementById('btn-respawn').onclick = () => {
+                gameState.player.hp = gameState.player.maxHp;
+                gameState.player.position.set(0, 0, 15);
+                document.getElementById('modal-gameover').classList.add('hidden');
+                updateHUD();
+            };
+
+            // Start Main Game Loop
+            animate();
+        };
+    </script>
+</body>
+</html>
